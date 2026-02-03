@@ -172,7 +172,7 @@ class SearchEngine:
         return chunks
 
     def index(self, force: bool = False) -> dict:
-        """Index all memory files."""
+        """Index memory files based on searchScope config."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -182,6 +182,9 @@ class SearchEngine:
 
         if not self.memory_dir.exists():
             return {"scanned": 0, "new": 0, "updated": 0, "chunks": 0}
+
+        # Get search scope from config
+        search_scope = self.memory_config.get("searchScope", "summary")
 
         # Get existing file hashes
         existing_files = {}
@@ -196,41 +199,31 @@ class SearchEngine:
 
             project = project_dir.name
 
-            for md_file in project_dir.glob("*.md"):
-                scanned += 1
-                rel_path = str(md_file.relative_to(self.memory_dir))
+            # Index summary files (not in full/ directory)
+            if search_scope in ("summary", "both"):
+                for md_file in project_dir.glob("*.md"):
+                    scanned += 1
+                    rel_path = str(md_file.relative_to(self.memory_dir))
 
-                # Read file content
-                with open(md_file, "r", encoding="utf-8") as f:
-                    content = f.read()
+                    result = self._index_file(cursor, md_file, rel_path, project, existing_files, force)
+                    if result == "new":
+                        new_indexed += 1
+                    elif result == "updated":
+                        updated += 1
 
-                file_hash = self._compute_hash(content)
+            # Index full files (in full/ directory)
+            if search_scope in ("full", "both"):
+                full_dir = project_dir / "full"
+                if full_dir.exists():
+                    for md_file in full_dir.glob("*.md"):
+                        scanned += 1
+                        rel_path = str(md_file.relative_to(self.memory_dir))
 
-                # Check if file needs indexing
-                if not force and rel_path in existing_files:
-                    if existing_files[rel_path] == file_hash:
-                        continue
-                    updated += 1
-                else:
-                    new_indexed += 1
-
-                # Remove old chunks
-                cursor.execute("DELETE FROM chunks WHERE file_path = ?", (rel_path,))
-
-                # Update file record
-                cursor.execute("""
-                    INSERT OR REPLACE INTO files (path, project, hash, created_at)
-                    VALUES (?, ?, ?, datetime('now'))
-                """, (rel_path, project, file_hash))
-
-                # Chunk and index content
-                chunks = self._chunk_content(content)
-                for chunk in chunks:
-                    chunk_id = f"{rel_path}:{chunk['start_line']}-{chunk['end_line']}"
-                    cursor.execute("""
-                        INSERT INTO chunks (id, file_path, start_line, end_line, content)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (chunk_id, rel_path, chunk["start_line"], chunk["end_line"], chunk["content"]))
+                        result = self._index_file(cursor, md_file, rel_path, project, existing_files, force)
+                        if result == "new":
+                            new_indexed += 1
+                        elif result == "updated":
+                            updated += 1
 
         # Rebuild FTS index
         cursor.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
@@ -249,6 +242,42 @@ class SearchEngine:
             "updated": updated,
             "chunks": total_chunks
         }
+
+    def _index_file(self, cursor, md_file: Path, rel_path: str, project: str, existing_files: dict, force: bool) -> str:
+        """Index a single file. Returns 'new', 'updated', or 'skip'."""
+        # Read file content
+        with open(md_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        file_hash = self._compute_hash(content)
+
+        # Check if file needs indexing
+        if not force and rel_path in existing_files:
+            if existing_files[rel_path] == file_hash:
+                return "skip"
+            result = "updated"
+        else:
+            result = "new"
+
+        # Remove old chunks
+        cursor.execute("DELETE FROM chunks WHERE file_path = ?", (rel_path,))
+
+        # Update file record
+        cursor.execute("""
+            INSERT OR REPLACE INTO files (path, project, hash, created_at)
+            VALUES (?, ?, ?, datetime('now'))
+        """, (rel_path, project, file_hash))
+
+        # Chunk and index content
+        chunks = self._chunk_content(content)
+        for chunk in chunks:
+            chunk_id = f"{rel_path}:{chunk['start_line']}-{chunk['end_line']}"
+            cursor.execute("""
+                INSERT INTO chunks (id, file_path, start_line, end_line, content)
+                VALUES (?, ?, ?, ?, ?)
+            """, (chunk_id, rel_path, chunk["start_line"], chunk["end_line"], chunk["content"]))
+
+        return result
 
     def search(self, query: str, limit: int = 6, project: Optional[str] = None, threshold: float = 0.35) -> list:
         """Search memories using Claude API for semantic matching."""

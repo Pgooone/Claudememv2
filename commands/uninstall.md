@@ -1,5 +1,4 @@
 ---
-name: uninstall
 description: 从 Claude Code 完全卸载 Claudememv2
 ---
 

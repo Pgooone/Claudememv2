@@ -1,5 +1,4 @@
 ---
-name: setup
 description: 配置 Claudememv2 记忆系统
 ---
 
@@ -76,7 +75,24 @@ description: 配置 Claudememv2 记忆系统
 5. 自定义数量: ____
 ```
 
-### 步骤 5：创建配置文件
+### 步骤 5：配置搜索范围
+
+询问用户选择搜索范围：
+
+```
+选择搜索记忆时的范围：
+
+1. 仅摘要文件（推荐，更快）
+   - 搜索精简的对话摘要
+
+2. 仅完整文件
+   - 搜索包含工具输入/输出的完整记录
+
+3. 两者都搜索
+   - 最全面但较慢
+```
+
+### 步骤 6：创建配置文件
 
 在 `~/.claude/plugins/Claudememv2/config.json` 创建配置文件：
 
@@ -93,12 +109,14 @@ description: 配置 Claudememv2 记忆系统
     "includeThinking": false,
     "includeToolCalls": true,
     "maxMessages": 25,
-    "cleanupDays": 90
+    "cleanupDays": 90,
+    "saveFull": true,
+    "searchScope": "summary"
   }
 }
 ```
 
-### 步骤 6：创建数据目录
+### 步骤 7：创建数据目录
 
 创建记忆数据目录结构：
 
@@ -114,13 +132,13 @@ mkdir -p ~/.claude/Claudememv2-data/memory
 mkdir -p ~/.claude/Claudememv2-data/logs
 ```
 
-### 步骤 7：安装 Python 依赖
+### 步骤 8：安装 Python 依赖
 
 ```bash
 pip install -r <plugin-path>/scripts/requirements.txt
 ```
 
-### 步骤 8：验证安装
+### 步骤 9：验证安装
 
 运行快速测试：
 ```bash
@@ -136,12 +154,13 @@ python <plugin-path>/scripts/memory_core.py status
   - 模型：[选择的模型]
   - 内容范围：[选择的范围]
   - 最大消息数：[选择的数量]
+  - 搜索范围：[选择的范围]
   - 数据目录：~/.claude/Claudememv2-data/
 
 现在可以使用：
-  /memory save     - 保存当前对话
-  /memory search   - 搜索记忆
-  /memory status   - 查看记忆状态
+  /Claudememv2:memory save     - 保存当前对话
+  /Claudememv2:memory search   - 搜索记忆
+  /Claudememv2:memory status   - 查看记忆状态
 
 或使用自然语言：
   "保存对话" / "save conversation"

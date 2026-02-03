@@ -97,59 +97,80 @@ class SessionParser:
                 except json.JSONDecodeError:
                     continue
 
-                # Extract message based on entry type
-                msg_type = entry.get("type")
-                role = entry.get("role")
+                # Claude Code session format: type is "user" or "assistant"
+                # Message content is in entry["message"]["content"]
+                entry_type = entry.get("type")
 
-                # Skip command messages (starting with /)
+                # Skip non-message entries (file-history-snapshot, progress, system, summary, etc.)
+                if entry_type not in ("user", "assistant"):
+                    continue
+
+                # Get the message object
+                message = entry.get("message", {})
+                role = message.get("role")
+
+                if not role:
+                    continue
+
+                # Skip meta messages (system reminders, etc.)
+                if entry.get("isMeta"):
+                    continue
+
+                # Extract content from message
+                content = self._extract_content(message, include_thinking=(content_scope == "full"))
+
+                if not content:
+                    continue
+
+                # Skip command messages (starting with / or containing command tags)
                 if role == "user":
-                    content = self._extract_content(entry)
-                    if content and content.startswith("/"):
+                    if content.startswith("/") or "<command-name>" in content:
                         continue
+                    # Skip local command outputs
+                    if "<local-command" in content:
+                        continue
+
+                # Extract tool calls from assistant messages if needed
+                tool_calls = []
+                if include_tool_calls and role == "assistant":
+                    tool_calls = self._extract_tool_calls(message)
 
                 # Filter based on content scope
                 if content_scope == "minimal":
-                    # Only user and assistant text messages
-                    if role in ("user", "assistant"):
-                        content = self._extract_content(entry, include_thinking=False)
-                        if content:
-                            messages.append({
-                                "role": role,
-                                "content": content,
-                                "timestamp": entry.get("timestamp")
-                            })
+                    # Only user and assistant text messages (no tool calls)
+                    messages.append({
+                        "role": role,
+                        "content": content,
+                        "timestamp": entry.get("timestamp")
+                    })
                 elif content_scope == "standard":
-                    # User, assistant, and tool calls (no thinking)
-                    if role in ("user", "assistant"):
-                        content = self._extract_content(entry, include_thinking=False)
-                        if content:
-                            messages.append({
-                                "role": role,
-                                "content": content,
-                                "timestamp": entry.get("timestamp")
-                            })
-                    elif include_tool_calls and msg_type == "tool_use":
+                    # User, assistant, and tool call summaries (no thinking)
+                    messages.append({
+                        "role": role,
+                        "content": content,
+                        "timestamp": entry.get("timestamp")
+                    })
+                    # Add tool calls as separate entries
+                    for tool_call in tool_calls:
                         messages.append({
                             "role": "tool",
-                            "tool_name": entry.get("name", "unknown"),
-                            "content": self._summarize_tool_call(entry),
+                            "tool_name": tool_call.get("name", "unknown"),
+                            "content": self._summarize_tool_call(tool_call),
                             "timestamp": entry.get("timestamp")
                         })
                 else:  # full
-                    # Everything including thinking
-                    if role in ("user", "assistant"):
-                        content = self._extract_content(entry, include_thinking=True)
-                        if content:
-                            messages.append({
-                                "role": role,
-                                "content": content,
-                                "timestamp": entry.get("timestamp")
-                            })
-                    elif include_tool_calls and msg_type == "tool_use":
+                    # Everything including thinking (already extracted above)
+                    messages.append({
+                        "role": role,
+                        "content": content,
+                        "timestamp": entry.get("timestamp")
+                    })
+                    # Add tool calls as separate entries
+                    for tool_call in tool_calls:
                         messages.append({
                             "role": "tool",
-                            "tool_name": entry.get("name", "unknown"),
-                            "content": self._summarize_tool_call(entry),
+                            "tool_name": tool_call.get("name", "unknown"),
+                            "content": self._summarize_tool_call(tool_call),
                             "timestamp": entry.get("timestamp")
                         })
 
@@ -159,9 +180,14 @@ class SessionParser:
 
         return messages
 
-    def _extract_content(self, entry: dict, include_thinking: bool = False) -> Optional[str]:
-        """Extract text content from a message entry."""
-        content = entry.get("content")
+    def _extract_content(self, message: dict, include_thinking: bool = False) -> Optional[str]:
+        """Extract text content from a message object.
+
+        Args:
+            message: The message object (entry["message"]) containing role and content
+            include_thinking: Whether to include thinking blocks in output
+        """
+        content = message.get("content")
 
         if isinstance(content, str):
             return content
@@ -170,39 +196,81 @@ class SessionParser:
             parts = []
             for item in content:
                 if isinstance(item, dict):
-                    if item.get("type") == "text":
-                        parts.append(item.get("text", ""))
-                    elif item.get("type") == "thinking" and include_thinking:
-                        parts.append(f"[Thinking: {item.get('thinking', '')}]")
+                    item_type = item.get("type")
+                    if item_type == "text":
+                        text = item.get("text", "")
+                        if text:
+                            parts.append(text)
+                    elif item_type == "thinking" and include_thinking:
+                        thinking = item.get("thinking", "")
+                        if thinking:
+                            parts.append(f"\n<thinking>\n{thinking}\n</thinking>\n")
                 elif isinstance(item, str):
                     parts.append(item)
             return "\n".join(parts) if parts else None
 
         return None
 
-    def _summarize_tool_call(self, entry: dict) -> str:
-        """Create a summary of a tool call."""
-        tool_name = entry.get("name", "unknown")
-        tool_input = entry.get("input", {})
+    def _extract_tool_calls(self, message: dict) -> list:
+        """Extract tool calls from an assistant message.
+
+        Args:
+            message: The message object containing content with tool_use blocks
+
+        Returns:
+            List of tool call dicts with name and input
+        """
+        content = message.get("content")
+        tool_calls = []
+
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "tool_use":
+                    tool_calls.append({
+                        "name": item.get("name", "unknown"),
+                        "input": item.get("input", {})
+                    })
+
+        return tool_calls
+
+    def _summarize_tool_call(self, tool_call: dict) -> str:
+        """Create a summary of a tool call.
+
+        Args:
+            tool_call: Dict with 'name' and 'input' keys
+        """
+        tool_name = tool_call.get("name", "unknown")
+        tool_input = tool_call.get("input", {})
 
         # Create a brief summary based on tool type
         if tool_name == "Read":
-            return f"[Read file: {tool_input.get('file_path', 'unknown')}]"
+            return f"[Read: {tool_input.get('file_path', 'unknown')}]"
         elif tool_name == "Write":
-            return f"[Write file: {tool_input.get('file_path', 'unknown')}]"
+            return f"[Write: {tool_input.get('file_path', 'unknown')}]"
         elif tool_name == "Edit":
-            return f"[Edit file: {tool_input.get('file_path', 'unknown')}]"
+            return f"[Edit: {tool_input.get('file_path', 'unknown')}]"
         elif tool_name == "Bash":
             cmd = tool_input.get("command", "")
-            if len(cmd) > 50:
-                cmd = cmd[:50] + "..."
+            if len(cmd) > 100:
+                cmd = cmd[:100] + "..."
             return f"[Bash: {cmd}]"
         elif tool_name == "Grep":
-            return f"[Grep: {tool_input.get('pattern', '')}]"
+            pattern = tool_input.get("pattern", "")
+            path = tool_input.get("path", "")
+            return f"[Grep: '{pattern}' in {path or 'cwd'}]"
         elif tool_name == "Glob":
             return f"[Glob: {tool_input.get('pattern', '')}]"
+        elif tool_name == "Task":
+            desc = tool_input.get("description", "")
+            return f"[Task: {desc}]"
+        elif tool_name == "WebFetch":
+            url = tool_input.get("url", "")
+            return f"[WebFetch: {url}]"
+        elif tool_name == "WebSearch":
+            query = tool_input.get("query", "")
+            return f"[WebSearch: {query}]"
         else:
-            return f"[Tool: {tool_name}]"
+            return f"[{tool_name}]"
 
     def generate_slug(self, messages: list) -> str:
         """Generate a descriptive slug for the session using Claude API."""
@@ -278,14 +346,137 @@ Slug:"""
 
         return self.model_config.get("fallback", "claude-3-haiku-20240307")
 
+    def parse_session_file_full(self, session_path: Path) -> list:
+        """Parse a session JSONL file and extract full messages with tool results.
+
+        This method extracts complete content including:
+        - User messages
+        - Assistant messages with thinking
+        - Tool calls with full input
+        - Tool results with full output
+        """
+        messages = []
+        max_messages = self.memory_config.get("maxMessages", 25)
+
+        # Track tool calls to match with results
+        pending_tool_calls = {}  # tool_use_id -> tool_call_info
+
+        with open(session_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                entry_type = entry.get("type")
+
+                # Skip non-message entries
+                if entry_type not in ("user", "assistant"):
+                    continue
+
+                message = entry.get("message", {})
+                role = message.get("role")
+
+                if not role:
+                    continue
+
+                # Skip meta messages
+                if entry.get("isMeta"):
+                    continue
+
+                content = message.get("content")
+
+                # Handle assistant messages
+                if entry_type == "assistant" and role == "assistant":
+                    # Extract text and thinking
+                    text_content = self._extract_content(message, include_thinking=True)
+
+                    if text_content:
+                        # Skip if it's just a command response
+                        if "<command-name>" not in text_content:
+                            messages.append({
+                                "role": "assistant",
+                                "content": text_content,
+                                "timestamp": entry.get("timestamp")
+                            })
+
+                    # Extract and store tool calls
+                    if isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, dict) and item.get("type") == "tool_use":
+                                tool_id = item.get("id")
+                                tool_name = item.get("name", "unknown")
+                                tool_input = item.get("input", {})
+
+                                # Store for later matching with result
+                                pending_tool_calls[tool_id] = {
+                                    "name": tool_name,
+                                    "input": tool_input
+                                }
+
+                                # Add tool call entry
+                                messages.append({
+                                    "role": "tool_call",
+                                    "tool_name": tool_name,
+                                    "tool_id": tool_id,
+                                    "input": tool_input,
+                                    "timestamp": entry.get("timestamp")
+                                })
+
+                # Handle user messages (including tool results)
+                elif entry_type == "user" and role == "user":
+                    if isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, dict):
+                                item_type = item.get("type")
+
+                                # Tool result
+                                if item_type == "tool_result":
+                                    tool_id = item.get("tool_use_id")
+                                    result_content = item.get("content", "")
+
+                                    # Get tool info from pending calls
+                                    tool_info = pending_tool_calls.get(tool_id, {})
+
+                                    messages.append({
+                                        "role": "tool_result",
+                                        "tool_name": tool_info.get("name", "unknown"),
+                                        "tool_id": tool_id,
+                                        "result": result_content,
+                                        "timestamp": entry.get("timestamp")
+                                    })
+
+                    elif isinstance(content, str):
+                        # Regular user message
+                        if content.startswith("/") or "<command-name>" in content:
+                            continue
+                        if "<local-command" in content:
+                            continue
+
+                        messages.append({
+                            "role": "user",
+                            "content": content,
+                            "timestamp": entry.get("timestamp")
+                        })
+
+        # Apply message limit (0 = no limit)
+        if max_messages > 0 and len(messages) > max_messages:
+            messages = messages[-max_messages:]
+
+        return messages
+
     def save_session(self, project_override: Optional[str] = None) -> dict:
-        """Save the current session to memory."""
+        """Save the current session to memory (summary + full files)."""
         # Find current session
         session_path = self.find_current_session()
         if session_path is None:
             raise ValueError("No current session found. Please have a conversation first.")
 
-        # Parse messages
+        # Parse messages for summary
         messages = self.parse_session_file(session_path)
         if not messages:
             raise ValueError("Current session has no valid content.")
@@ -310,26 +501,50 @@ Slug:"""
 
         # Handle duplicate filenames
         counter = 1
+        base_filename = filename
         while file_path.exists():
             filename = f"{date_str}-{slug}-{counter}.md"
             file_path = project_dir / filename
             counter += 1
 
-        # Generate markdown content
-        content = self._generate_markdown(messages, project)
-
-        # Write file
+        # Generate and write summary markdown
+        summary_content = self._generate_markdown(messages, project)
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(summary_content)
 
-        return {
+        # Save full file if enabled
+        save_full = self.memory_config.get("saveFull", True)
+        full_file_path = None
+
+        if save_full:
+            # Parse full messages
+            full_messages = self.parse_session_file_full(session_path)
+
+            if full_messages:
+                # Create full directory
+                full_dir = project_dir / "full"
+                full_dir.mkdir(parents=True, exist_ok=True)
+
+                full_file_path = full_dir / filename
+
+                # Generate and write full markdown
+                full_content = self._generate_full_markdown(full_messages, project)
+                with open(full_file_path, "w", encoding="utf-8") as f:
+                    f.write(full_content)
+
+        result = {
             "file_path": str(file_path),
             "message_count": len(messages),
             "project": project
         }
 
+        if full_file_path:
+            result["full_file_path"] = str(full_file_path)
+
+        return result
+
     def _generate_markdown(self, messages: list, project: str) -> str:
-        """Generate markdown content for the memory file."""
+        """Generate markdown content for the summary memory file."""
         now = datetime.now()
 
         # YAML frontmatter
@@ -340,6 +555,7 @@ Slug:"""
             "source: claude-code",
             f"messages: {len(messages)}",
             f"content_scope: {self.memory_config.get('contentScope', 'standard')}",
+            "type: summary",
             "---",
             "",
             f"# Session: {now.strftime('%Y-%m-%d %H:%M:%S')}",
@@ -363,5 +579,77 @@ Slug:"""
             else:
                 lines.append(f"**{role}**: {content}")
             lines.append("")
+
+        return "\n".join(lines)
+
+    def _generate_full_markdown(self, messages: list, project: str) -> str:
+        """Generate markdown content for the full memory file with complete tool I/O."""
+        now = datetime.now()
+
+        # YAML frontmatter
+        lines = [
+            "---",
+            f"project: {project}",
+            f"created: {now.isoformat()}",
+            "source: claude-code",
+            f"messages: {len(messages)}",
+            "content_scope: full",
+            "type: full",
+            "---",
+            "",
+            f"# Session: {now.strftime('%Y-%m-%d %H:%M:%S')} (Full)",
+            "",
+            "## Metadata",
+            f"- **Project**: {project}",
+            f"- **Working Directory**: {os.getcwd()}",
+            f"- **Messages**: {len(messages)}",
+            "",
+            "## Conversation",
+            ""
+        ]
+
+        # Add messages
+        for msg in messages:
+            role = msg.get("role", "unknown")
+
+            if role == "user":
+                content = msg.get("content", "")
+                lines.append(f"### User")
+                lines.append("")
+                lines.append(content)
+                lines.append("")
+
+            elif role == "assistant":
+                content = msg.get("content", "")
+                lines.append(f"### Assistant")
+                lines.append("")
+                lines.append(content)
+                lines.append("")
+
+            elif role == "tool_call":
+                tool_name = msg.get("tool_name", "unknown")
+                tool_input = msg.get("input", {})
+                lines.append(f"### Tool Call: {tool_name}")
+                lines.append("")
+                lines.append("**Input:**")
+                lines.append("```json")
+                lines.append(json.dumps(tool_input, indent=2, ensure_ascii=False))
+                lines.append("```")
+                lines.append("")
+
+            elif role == "tool_result":
+                tool_name = msg.get("tool_name", "unknown")
+                result = msg.get("result", "")
+                lines.append(f"### Tool Result: {tool_name}")
+                lines.append("")
+                lines.append("**Output:**")
+                lines.append("```")
+                # Handle result that might be very long
+                if isinstance(result, str):
+                    lines.append(result)
+                else:
+                    lines.append(json.dumps(result, indent=2, ensure_ascii=False))
+                lines.append("```")
+                lines.append("")
 
         return "\n".join(lines)

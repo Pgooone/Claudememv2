@@ -1,5 +1,4 @@
 ---
-name: memory
 description: Claudememv2 记忆管理命令 - 保存、搜索、索引、状态、清理
 ---
 
