@@ -48,12 +48,12 @@ git clone https://github.com/Pgooone/Claudememv2.git
 
 | 命令 | 说明 |
 |------|------|
-| `/memory save` | 保存当前对话到记忆 |
-| `/memory search <查询>` | 搜索记忆 |
-| `/memory index` | 索引所有记忆文件 |
-| `/memory status` | 查看记忆系统状态 |
-| `/memory cleanup` | 清理旧记忆 |
-| `/memory config` | 查看或修改配置 |
+| `/Claudememv2:memory save` | 保存当前对话到记忆 |
+| `/Claudememv2:memory search <查询>` | 搜索记忆 |
+| `/Claudememv2:memory index` | 索引所有记忆文件 |
+| `/Claudememv2:memory status` | 查看记忆系统状态 |
+| `/Claudememv2:memory cleanup` | 清理旧记忆 |
+| `/Claudememv2:memory config` | 查看或修改配置 |
 
 ### 自然语言触发
 
@@ -81,7 +81,9 @@ git clone https://github.com/Pgooone/Claudememv2.git
     "includeThinking": false,
     "includeToolCalls": true,
     "maxMessages": 25,
-    "cleanupDays": 90
+    "cleanupDays": 90,
+    "saveFull": true,
+    "searchScope": "summary"
   }
 }
 ```
@@ -101,6 +103,12 @@ git clone https://github.com/Pgooone/Claudememv2.git
 - **standard（标准）** - 用户 + 助手 + 工具调用（无思考过程）
 - **minimal（精简）** - 仅用户和助手消息
 
+### 搜索范围选项
+
+- **summary（摘要）** - 仅搜索摘要文件（默认，更快）
+- **full（完整）** - 仅搜索完整文件（含工具输入/输出）
+- **both（两者）** - 搜索摘要和完整文件
+
 ## 数据存储
 
 记忆存储在 `~/.claude/Claudememv2-data/`：
@@ -109,8 +117,11 @@ git clone https://github.com/Pgooone/Claudememv2.git
 ~/.claude/Claudememv2-data/
 ├── memory/
 │   ├── 项目A/
-│   │   ├── 2026-02-03-api-design.md
-│   │   └── 2026-02-03-bug-fix.md
+│   │   ├── 2026-02-03-api-design.md      # 摘要文件
+│   │   ├── 2026-02-03-bug-fix.md
+│   │   └── full/                          # 完整文件目录
+│   │       ├── 2026-02-03-api-design.md  # 含工具输入/输出
+│   │       └── 2026-02-03-bug-fix.md
 │   └── 项目B/
 │       └── ...
 ├── memory.sqlite
@@ -192,12 +203,12 @@ git clone https://github.com/Pgooone/Claudememv2.git
 
 | Command | Description |
 |---------|-------------|
-| `/memory save` | Save current conversation to memory |
-| `/memory search <query>` | Search memories |
-| `/memory index` | Index all memory files |
-| `/memory status` | View memory system status |
-| `/memory cleanup` | Clean up old memories |
-| `/memory config` | View or modify configuration |
+| `/Claudememv2:memory save` | Save current conversation to memory |
+| `/Claudememv2:memory search <query>` | Search memories |
+| `/Claudememv2:memory index` | Index all memory files |
+| `/Claudememv2:memory status` | View memory system status |
+| `/Claudememv2:memory cleanup` | Clean up old memories |
+| `/Claudememv2:memory config` | View or modify configuration |
 
 ### Natural Language
 
@@ -225,7 +236,9 @@ Configuration is stored at `~/.claude/plugins/Claudememv2/config.json`:
     "includeThinking": false,
     "includeToolCalls": true,
     "maxMessages": 25,
-    "cleanupDays": 90
+    "cleanupDays": 90,
+    "saveFull": true,
+    "searchScope": "summary"
   }
 }
 ```
@@ -245,6 +258,12 @@ During setup, you can choose:
 - **standard** - user + assistant + tool calls (no thinking)
 - **minimal** - user + assistant messages only
 
+### Search Scope Options
+
+- **summary** - Search summary files only (default, faster)
+- **full** - Search full files only (with tool I/O)
+- **both** - Search both summary and full files
+
 ## Data Storage
 
 Memories are stored at `~/.claude/Claudememv2-data/`:
@@ -253,8 +272,11 @@ Memories are stored at `~/.claude/Claudememv2-data/`:
 ~/.claude/Claudememv2-data/
 ├── memory/
 │   ├── project-a/
-│   │   ├── 2026-02-03-api-design.md
-│   │   └── 2026-02-03-bug-fix.md
+│   │   ├── 2026-02-03-api-design.md      # Summary file
+│   │   ├── 2026-02-03-bug-fix.md
+│   │   └── full/                          # Full files directory
+│   │       ├── 2026-02-03-api-design.md  # With tool I/O
+│   │       └── 2026-02-03-bug-fix.md
 │   └── project-b/
 │       └── ...
 ├── memory.sqlite
