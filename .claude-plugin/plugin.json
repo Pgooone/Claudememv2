@@ -1,0 +1,25 @@
+{
+  "name": "Claudememv2",
+  "description": "Claude Code 智能记忆系统 - 保存对话、语义搜索、跨会话知识检索",
+  "version": "2.1.0",
+  "author": {
+    "name": "Pgooone",
+    "url": "https://github.com/Pgooone"
+  },
+  "homepage": "https://github.com/Pgooone/Claudememv2",
+  "repository": "https://github.com/Pgooone/Claudememv2",
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "记忆",
+    "search",
+    "搜索",
+    "conversation",
+    "对话",
+    "knowledge",
+    "知识",
+    "semantic",
+    "语义",
+    "claude-code"
+  ]
+}

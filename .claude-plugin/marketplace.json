@@ -1,0 +1,31 @@
+{
+  "name": "Claudememv2",
+  "owner": {
+    "name": "Pgooone",
+    "email": "pgooone@users.noreply.github.com"
+  },
+  "metadata": {
+    "description": "Claude Code 智能记忆系统 - 保存对话、语义搜索、跨会话知识检索",
+    "version": "2.1.0"
+  },
+  "plugins": [
+    {
+      "name": "Claudememv2",
+      "source": "./",
+      "description": "将 Claude Code 对话保存到可搜索的记忆库。功能：使用 /memory save 手动保存、使用 Claude API 语义搜索、按项目组织、可配置内容范围。",
+      "category": "productivity",
+      "tags": [
+        "memory",
+        "记忆",
+        "search",
+        "搜索",
+        "conversation",
+        "对话",
+        "knowledge",
+        "知识",
+        "semantic",
+        "语义"
+      ]
+    }
+  ]
+}
