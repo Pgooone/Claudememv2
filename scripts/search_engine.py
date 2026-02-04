@@ -87,25 +87,38 @@ class SearchEngine:
         if source == "custom" and self.model_config.get("customModelId"):
             return self.model_config["customModelId"]
 
-        # Try to inherit from Claude Code settings
-        if source == "inherit":
-            try:
-                if os.name == "nt":
-                    settings_path = Path(os.environ.get("USERPROFILE", "")) / ".claude" / "settings.json"
-                else:
-                    settings_path = Path.home() / ".claude" / "settings.json"
+        # Try to read from Claude Code settings
+        try:
+            if os.name == "nt":
+                settings_path = Path(os.environ.get("USERPROFILE", "")) / ".claude" / "settings.json"
+            else:
+                settings_path = Path.home() / ".claude" / "settings.json"
 
-                if settings_path.exists():
-                    with open(settings_path, "r", encoding="utf-8") as f:
-                        settings = json.load(f)
-                        # Check env.ANTHROPIC_MODEL first (new format)
-                        if "env" in settings and "ANTHROPIC_MODEL" in settings["env"]:
-                            return settings["env"]["ANTHROPIC_MODEL"]
-                        # Fallback to model key (old format)
-                        if "model" in settings:
-                            return settings["model"]
-            except Exception:
-                pass
+            if settings_path.exists():
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+                    env = settings.get("env", {})
+
+                    # Map source to environment variable
+                    model_map = {
+                        "inherit": "ANTHROPIC_MODEL",
+                        "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                        "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                        "opus": "ANTHROPIC_DEFAULT_OPUS_MODEL",
+                    }
+
+                    if source in model_map and model_map[source] in env:
+                        return env[model_map[source]]
+
+                    # Fallback to ANTHROPIC_MODEL if source not found
+                    if "ANTHROPIC_MODEL" in env:
+                        return env["ANTHROPIC_MODEL"]
+
+                    # Legacy format support
+                    if "model" in settings:
+                        return settings["model"]
+        except Exception:
+            pass
 
         return self.model_config.get("fallback", "claude-3-haiku-20240307")
 

@@ -178,12 +178,36 @@ def cmd_status(args):
     else:
         size_str = f"{total_size / (1024 * 1024):.1f} MB"
 
-    # Get model info
+    # Get model info - read actual model from Claude Code settings
     model_source = config["model"]["source"]
-    if model_source == "inherit":
-        model_str = f"{config['model']['fallback']} (inherited)"
-    else:
-        model_str = config["model"]["customModelId"] or config["model"]["fallback"]
+    model_str = config["model"].get("fallback", "unknown")
+
+    try:
+        if sys.platform == "win32":
+            settings_path = Path(os.environ.get("USERPROFILE", "")) / ".claude" / "settings.json"
+        else:
+            settings_path = Path.home() / ".claude" / "settings.json"
+
+        if settings_path.exists():
+            with open(settings_path, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+                env = settings.get("env", {})
+
+                model_map = {
+                    "inherit": "ANTHROPIC_MODEL",
+                    "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                    "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                    "opus": "ANTHROPIC_DEFAULT_OPUS_MODEL",
+                }
+
+                if model_source == "custom":
+                    model_str = config["model"].get("customModelId", model_str)
+                elif model_source in model_map and model_map[model_source] in env:
+                    model_str = f"{env[model_map[model_source]]} ({model_source})"
+                elif "ANTHROPIC_MODEL" in env:
+                    model_str = f"{env['ANTHROPIC_MODEL']} (inherit)"
+    except Exception:
+        pass
 
     print(f"[STATUS] Claudememv2 Memory Status")
     print(f"  Projects: {projects}")

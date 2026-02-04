@@ -26,23 +26,34 @@ description: 配置 Claudememv2 记忆系统
 
 ### 步骤 2：配置模型
 
-询问用户选择用于语义搜索的模型：
+首先读取 `~/.claude/settings.json` 中的模型配置，获取用户已配置的模型列表：
+- `env.ANTHROPIC_DEFAULT_HAIKU_MODEL` - Haiku 模型
+- `env.ANTHROPIC_DEFAULT_SONNET_MODEL` - Sonnet 模型
+- `env.ANTHROPIC_DEFAULT_OPUS_MODEL` - Opus 模型
+- `env.ANTHROPIC_MODEL` - 当前默认模型
+
+然后询问用户选择用于语义搜索的模型（选项从用户配置中动态读取）：
 
 ```
 请选择用于语义搜索的模型：
 
-1. 继承 Claude Code 配置（推荐）
-   - 自动使用当前 Claude Code 模型设置
+1. 继承当前模型（推荐）
+   - 使用 ANTHROPIC_MODEL: [从配置读取的值]
 
-2. claude-3-haiku（快速、低成本）
+2. Haiku（快速、低成本）
+   - 使用 [从 ANTHROPIC_DEFAULT_HAIKU_MODEL 读取的值]
 
-3. claude-3-5-sonnet（平衡）
+3. Sonnet（平衡）
+   - 使用 [从 ANTHROPIC_DEFAULT_SONNET_MODEL 读取的值]
 
-4. claude-3-opus（最强能力）
+4. Opus（最强能力）
+   - 使用 [从 ANTHROPIC_DEFAULT_OPUS_MODEL 读取的值]
 
 5. 自定义模型 ID
-   - 输入任意 Anthropic 模型 ID
+   - 输入任意模型 ID
 ```
+
+**注意**：如果用户配置中没有某个模型，则该选项不显示或使用默认值。
 
 ### 步骤 3：配置内容范围
 
@@ -148,7 +159,7 @@ python <plugin-path>/scripts/memory_core.py status
 ## 成功消息
 
 ```
-✓ Claudememv2 配置完成！
+[OK] Claudememv2 配置完成！
 
 配置信息：
   - 模型：[选择的模型]
