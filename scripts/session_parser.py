@@ -701,26 +701,11 @@ Slug:"""
 
         # 添加 AI 生成的摘要
         if ai_summary:
-            lines.append("# AI 摘要")
-            lines.append("")
             lines.append(ai_summary)
             lines.append("")
-            lines.append("---")
-            lines.append("")
-
-        # 添加原始对话
-        lines.append("# 原始对话")
-        lines.append("")
-
-        for msg in messages:
-            role = msg.get("role", "unknown")
-            content = msg.get("content", "")
-            role_cn = {"user": "用户", "assistant": "助手", "tool": "工具"}.get(role, role)
-
-            if role == "tool":
-                lines.append(f"**[工具: {msg.get('tool_name', 'unknown')}]**: {content}")
-            else:
-                lines.append(f"**{role_cn}**: {content}")
+        else:
+            # 如果没有 AI 摘要，添加简短说明
+            lines.append("*（AI 摘要未生成，请查看 full/ 目录下的完整对话记录）*")
             lines.append("")
 
         return "\n".join(lines)
