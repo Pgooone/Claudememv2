@@ -1,6 +1,6 @@
 # Claudememv2
 
-为 Claude Code 设计的智能记忆系统 - 保存对话、语义搜索、跨会话知识检索。
+为 Claude Code 设计的智能记忆系统 - 保存对话、AI 摘要生成、语义搜索、跨会话知识检索。
 
 [English](#english) | 中文
 
@@ -8,6 +8,7 @@
 
 ## 功能特性
 
+- **AI 摘要生成**：使用 Claude API 自动生成结构化对话摘要
 - **保存对话**：手动将 Claude Code 会话保存到可搜索的记忆库
 - **语义搜索**：使用 Claude API 进行智能语义匹配搜索
 - **项目组织**：记忆按项目自动分类存储
@@ -84,6 +85,11 @@ git clone https://github.com/Pgooone/Claudememv2.git
     "cleanupDays": 90,
     "saveFull": true,
     "searchScope": "summary"
+  },
+  "summary": {
+    "enabled": true,
+    "format": "structured",
+    "timing": "on_save"
   }
 }
 ```
@@ -109,6 +115,19 @@ git clone https://github.com/Pgooone/Claudememv2.git
 - **full（完整）** - 仅搜索完整文件（含工具输入/输出）
 - **both（两者）** - 搜索摘要和完整文件
 
+### AI 摘要格式选项
+
+- **structured（结构化）** - 会话主题、关键决策、完成任务、问题解决、待办事项
+- **freeform（自由格式）** - Claude 自由生成一段总结性文字
+- **mixed（混合格式）** - 概述 + 关键点列表
+
+### AI 摘要生成时机
+
+- **on_save（保存时）** - 执行保存命令时生成摘要（推荐）
+- **async（异步）** - 后台异步生成摘要
+- **on_demand（按需）** - 搜索时才生成摘要
+- **disabled（禁用）** - 不生成 AI 摘要
+
 ## 数据存储
 
 记忆存储在 `~/.claude/Claudememv2-data/`：
@@ -117,15 +136,50 @@ git clone https://github.com/Pgooone/Claudememv2.git
 ~/.claude/Claudememv2-data/
 ├── memory/
 │   ├── 项目A/
-│   │   ├── 2026-02-03-api-design.md      # 摘要文件
+│   │   ├── 2026-02-03-api-design.md      # AI 摘要文件
 │   │   ├── 2026-02-03-bug-fix.md
-│   │   └── full/                          # 完整文件目录
+│   │   └── full/                          # 完整对话目录
 │   │       ├── 2026-02-03-api-design.md  # 含工具输入/输出
 │   │       └── 2026-02-03-bug-fix.md
 │   └── 项目B/
 │       └── ...
 ├── memory.sqlite
 └── logs/
+```
+
+### 摘要文件示例
+
+```markdown
+---
+project: my-project
+created: 2026-02-04T12:00:00
+summary_format: structured
+has_ai_summary: true
+---
+
+# 会话记录: 2026-02-04 12:00:00
+
+## 元数据
+- **项目**: my-project
+- **消息数**: 25
+
+## 会话主题
+实现用户认证功能
+
+## 关键决策和结论
+- 使用 JWT 进行身份验证
+- 密码使用 bcrypt 加密
+
+## 完成的任务
+- [x] 创建用户模型
+- [x] 实现登录接口
+
+## 遇到的问题和解决方案
+- **问题**: Token 过期处理
+  **解决**: 添加刷新 Token 机制
+
+## 后续待办
+- [ ] 添加密码重置功能
 ```
 
 ## 卸载
@@ -159,10 +213,11 @@ MIT 许可证 - 详见 [LICENSE](LICENSE)
 <a name="english"></a>
 # English
 
-Intelligent memory system for Claude Code - save conversations, semantic search, and cross-session knowledge retrieval.
+Intelligent memory system for Claude Code - save conversations, AI summary generation, semantic search, and cross-session knowledge retrieval.
 
 ## Features
 
+- **AI Summary Generation**: Automatically generate structured conversation summaries using Claude API
 - **Save Conversations**: Manually save Claude Code sessions to searchable memory
 - **Semantic Search**: Find relevant memories using Claude API for intelligent matching
 - **Project Organization**: Memories automatically organized by project
@@ -239,6 +294,11 @@ Configuration is stored at `~/.claude/plugins/Claudememv2/config.json`:
     "cleanupDays": 90,
     "saveFull": true,
     "searchScope": "summary"
+  },
+  "summary": {
+    "enabled": true,
+    "format": "structured",
+    "timing": "on_save"
   }
 }
 ```
@@ -264,6 +324,19 @@ During setup, you can choose:
 - **full** - Search full files only (with tool I/O)
 - **both** - Search both summary and full files
 
+### AI Summary Format Options
+
+- **structured** - Session topic, key decisions, completed tasks, problem solutions, todos
+- **freeform** - Claude generates a free-form summary paragraph
+- **mixed** - Overview + key points list
+
+### AI Summary Timing Options
+
+- **on_save** - Generate summary when saving (recommended)
+- **async** - Generate summary asynchronously in background
+- **on_demand** - Generate summary only when searching
+- **disabled** - Do not generate AI summary
+
 ## Data Storage
 
 Memories are stored at `~/.claude/Claudememv2-data/`:
@@ -272,15 +345,50 @@ Memories are stored at `~/.claude/Claudememv2-data/`:
 ~/.claude/Claudememv2-data/
 ├── memory/
 │   ├── project-a/
-│   │   ├── 2026-02-03-api-design.md      # Summary file
+│   │   ├── 2026-02-03-api-design.md      # AI Summary file
 │   │   ├── 2026-02-03-bug-fix.md
-│   │   └── full/                          # Full files directory
+│   │   └── full/                          # Full conversation directory
 │   │       ├── 2026-02-03-api-design.md  # With tool I/O
 │   │       └── 2026-02-03-bug-fix.md
 │   └── project-b/
 │       └── ...
 ├── memory.sqlite
 └── logs/
+```
+
+### Summary File Example
+
+```markdown
+---
+project: my-project
+created: 2026-02-04T12:00:00
+summary_format: structured
+has_ai_summary: true
+---
+
+# Session: 2026-02-04 12:00:00
+
+## Metadata
+- **Project**: my-project
+- **Messages**: 25
+
+## Session Topic
+Implement user authentication feature
+
+## Key Decisions and Conclusions
+- Use JWT for authentication
+- Encrypt passwords with bcrypt
+
+## Completed Tasks
+- [x] Create user model
+- [x] Implement login endpoint
+
+## Problems and Solutions
+- **Problem**: Token expiration handling
+  **Solution**: Add refresh token mechanism
+
+## Todos
+- [ ] Add password reset feature
 ```
 
 ## Uninstallation
