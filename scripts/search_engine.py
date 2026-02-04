@@ -98,6 +98,10 @@ class SearchEngine:
                 if settings_path.exists():
                     with open(settings_path, "r", encoding="utf-8") as f:
                         settings = json.load(f)
+                        # Check env.ANTHROPIC_MODEL first (new format)
+                        if "env" in settings and "ANTHROPIC_MODEL" in settings["env"]:
+                            return settings["env"]["ANTHROPIC_MODEL"]
+                        # Fallback to model key (old format)
                         if "model" in settings:
                             return settings["model"]
             except Exception:

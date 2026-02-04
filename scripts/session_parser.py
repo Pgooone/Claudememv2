@@ -64,12 +64,9 @@ class SessionParser:
             if not project_dir.is_dir():
                 continue
 
-            sessions_dir = project_dir / "sessions"
-            if not sessions_dir.exists():
-                continue
-
-            # Find latest session in this project
-            for session_file in sessions_dir.glob("*.jsonl"):
+            # Session files are directly in project directory (not in sessions/ subdirectory)
+            # Look for .jsonl files directly in project_dir
+            for session_file in project_dir.glob("*.jsonl"):
                 mtime = session_file.stat().st_mtime
                 if mtime > latest_time:
                     latest_time = mtime
@@ -339,6 +336,10 @@ Slug:"""
                 if settings_path.exists():
                     with open(settings_path, "r", encoding="utf-8") as f:
                         settings = json.load(f)
+                        # Check env.ANTHROPIC_MODEL first (new format)
+                        if "env" in settings and "ANTHROPIC_MODEL" in settings["env"]:
+                            return settings["env"]["ANTHROPIC_MODEL"]
+                        # Fallback to model key (old format)
                         if "model" in settings:
                             return settings["model"]
             except Exception:

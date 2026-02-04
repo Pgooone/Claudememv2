@@ -11,6 +11,14 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+# Fix Windows console encoding issues
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # Import submodules
 from session_parser import SessionParser
 from search_engine import SearchEngine
@@ -87,12 +95,12 @@ def cmd_save(args):
 
     try:
         result = parser.save_session(args.project)
-        print(f"✓ Session saved to memory")
+        print(f"[OK] Session saved to memory")
         print(f"  File: {result['file_path']}")
         print(f"  Messages: {result['message_count']}")
         print(f"  Project: {result['project']}")
     except Exception as e:
-        print(f"⚠️ Error saving session: {e}", file=sys.stderr)
+        print(f"[ERROR] Error saving session: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -110,15 +118,15 @@ def cmd_search(args):
         )
 
         if not results:
-            print(f"🔍 No matching memories found for: \"{args.query}\"")
+            print(f"[SEARCH] No matching memories found for: \"{args.query}\"")
             return
 
-        print(f"🔍 Search results (query: \"{args.query}\")\n")
+        print(f"[SEARCH] Search results (query: \"{args.query}\")\n")
         for i, result in enumerate(results, 1):
             print(f"{i}. [{result['score']:.2f}] {result['file']}:{result['lines']}")
             print(f"   \"{result['excerpt'][:100]}...\"\n")
     except Exception as e:
-        print(f"⚠️ Error searching: {e}", file=sys.stderr)
+        print(f"[ERROR] Error searching: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -129,13 +137,13 @@ def cmd_index(args):
 
     try:
         result = engine.index(force=args.force)
-        print(f"📚 Memory index updated")
+        print(f"[INDEX] Memory index updated")
         print(f"  Files scanned: {result['scanned']}")
         print(f"  New indexed: {result['new']}")
         print(f"  Updated: {result['updated']}")
         print(f"  Total chunks: {result['chunks']}")
     except Exception as e:
-        print(f"⚠️ Error indexing: {e}", file=sys.stderr)
+        print(f"[ERROR] Error indexing: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -177,7 +185,7 @@ def cmd_status(args):
     else:
         model_str = config["model"]["customModelId"] or config["model"]["fallback"]
 
-    print(f"📊 Claudememv2 Memory Status")
+    print(f"[STATUS] Claudememv2 Memory Status")
     print(f"  Projects: {projects}")
     print(f"  Files: {files}")
     print(f"  Total size: {size_str}")
@@ -213,9 +221,9 @@ def cmd_cleanup(args):
                         remaining += 1
 
     if args.dry_run:
-        print(f"🧹 Memory cleanup preview (dry run)")
+        print(f"[CLEANUP] Memory cleanup preview (dry run)")
     else:
-        print(f"🧹 Memory cleanup complete")
+        print(f"[CLEANUP] Memory cleanup complete")
     print(f"  Files {'to delete' if args.dry_run else 'deleted'}: {deleted}")
     print(f"  Space {'to free' if args.dry_run else 'freed'}: {freed / 1024:.1f} KB")
     print(f"  Remaining files: {remaining}")
@@ -244,7 +252,7 @@ def cmd_config(args):
     }
 
     if args.key not in key_map:
-        print(f"⚠️ Unknown config key: {args.key}")
+        print(f"[ERROR] Unknown config key: {args.key}")
         print(f"Available keys: {', '.join(key_map.keys())}")
         sys.exit(1)
 
@@ -267,7 +275,7 @@ def cmd_config(args):
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
-        print(f"✓ Config updated: {args.key} = {config[section][key]}")
+        print(f"[OK] Config updated: {args.key} = {config[section][key]}")
 
 
 def main():
