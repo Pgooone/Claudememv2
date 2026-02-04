@@ -96,12 +96,12 @@ git clone https://github.com/Pgooone/Claudememv2.git
 
 ### 模型选项
 
-安装时可选择：
-1. **继承 Claude Code 配置**（推荐）- 使用当前 Claude Code 模型设置
-2. **claude-3-haiku** - 快速、低成本
-3. **claude-3-5-sonnet** - 平衡
-4. **claude-3-opus** - 最强能力
-5. **自定义** - 任意 Anthropic 模型 ID
+安装时从 Claude Code 配置中动态读取可用模型：
+1. **继承当前模型**（推荐）- 使用 `ANTHROPIC_MODEL` 配置的模型
+2. **Haiku** - 使用 `ANTHROPIC_DEFAULT_HAIKU_MODEL` 配置的模型（快速、低成本）
+3. **Sonnet** - 使用 `ANTHROPIC_DEFAULT_SONNET_MODEL` 配置的模型（平衡）
+4. **Opus** - 使用 `ANTHROPIC_DEFAULT_OPUS_MODEL` 配置的模型（最强能力）
+5. **自定义** - 输入任意 Anthropic 模型 ID
 
 ### 内容范围选项
 
@@ -305,12 +305,12 @@ Configuration is stored at `~/.claude/plugins/Claudememv2/config.json`:
 
 ### Model Options
 
-During setup, you can choose:
-1. **Inherit from Claude Code** (Recommended) - Uses your current Claude Code model
-2. **claude-3-haiku** - Fast, low cost
-3. **claude-3-5-sonnet** - Balanced
-4. **claude-3-opus** - Most capable
-5. **Custom** - Any Anthropic model ID
+Models are dynamically read from your Claude Code configuration during setup:
+1. **Inherit current model** (Recommended) - Uses model from `ANTHROPIC_MODEL`
+2. **Haiku** - Uses model from `ANTHROPIC_DEFAULT_HAIKU_MODEL` (fast, low cost)
+3. **Sonnet** - Uses model from `ANTHROPIC_DEFAULT_SONNET_MODEL` (balanced)
+4. **Opus** - Uses model from `ANTHROPIC_DEFAULT_OPUS_MODEL` (most capable)
+5. **Custom** - Enter any Anthropic model ID
 
 ### Content Scope Options
 
