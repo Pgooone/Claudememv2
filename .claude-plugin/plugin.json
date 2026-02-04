@@ -1,7 +1,7 @@
 {
   "name": "Claudememv2",
   "description": "Claude Code 智能记忆系统 - 保存对话、语义搜索、跨会话知识检索",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "author": {
     "name": "Pgooone",
     "url": "https://github.com/Pgooone"

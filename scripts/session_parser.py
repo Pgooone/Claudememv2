@@ -171,8 +171,8 @@ class SessionParser:
                             "timestamp": entry.get("timestamp")
                         })
 
-        # Apply message limit (0 = no limit)
-        if max_messages > 0 and len(messages) > max_messages:
+        # Apply message limit (0 or None = no limit)
+        if max_messages and max_messages > 0 and len(messages) > max_messages:
             messages = messages[-max_messages:]
 
         return messages
@@ -360,6 +360,117 @@ Slug:"""
 
         return self.model_config.get("fallback", "claude-3-haiku-20240307")
 
+    def generate_summary(self, messages: list) -> Optional[str]:
+        """使用 Claude API 生成对话摘要。"""
+        summary_config = self.config.get("summary", {})
+
+        # 检查是否启用摘要
+        if not summary_config.get("enabled", True):
+            return None
+
+        timing = summary_config.get("timing", "on_save")
+        if timing == "disabled":
+            return None
+
+        if not HAS_ANTHROPIC:
+            return None
+
+        format_type = summary_config.get("format", "structured")
+
+        # 准备对话内容
+        conversation = self._format_conversation_for_summary(messages)
+
+        # 获取对应的 prompt
+        prompt = self._get_summary_prompt(format_type, conversation)
+
+        try:
+            model = self._get_model()
+            client = anthropic.Anthropic()
+            response = client.messages.create(
+                model=model,
+                max_tokens=1500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.content[0].text
+        except Exception as e:
+            # API 调用失败时返回 None，仍保存原始对话
+            return None
+
+    def _format_conversation_for_summary(self, messages: list) -> str:
+        """将消息列表格式化为摘要用的文本。"""
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+
+            if role == "tool":
+                tool_name = msg.get("tool_name", "unknown")
+                parts.append(f"[工具调用: {tool_name}] {content}")
+            else:
+                role_cn = {"user": "用户", "assistant": "助手"}.get(role, role)
+                # 截断过长的内容
+                if len(content) > 500:
+                    content = content[:500] + "..."
+                parts.append(f"{role_cn}: {content}")
+
+        return "\n\n".join(parts)
+
+    def _get_summary_prompt(self, format_type: str, conversation: str) -> str:
+        """根据格式类型获取摘要 prompt。"""
+        if format_type == "structured":
+            return f"""基于以下对话内容，生成一个结构化摘要。请使用中文输出（专有名词除外）。严格按照以下格式：
+
+## 会话主题
+[一句话描述本次会话的主要目标或主题]
+
+## 关键决策和结论
+- [决策/结论 1]
+- [决策/结论 2]
+...
+
+## 完成的任务
+- [x] [任务 1]
+- [x] [任务 2]
+...
+
+## 遇到的问题和解决方案
+- **问题**: [问题描述]
+  **解决**: [解决方案]
+...
+
+## 后续待办
+- [ ] [待办 1]
+- [ ] [待办 2]
+...
+
+如果某个部分没有相关内容，写"无"。
+
+---
+对话内容：
+{conversation}"""
+
+        elif format_type == "freeform":
+            return f"""基于以下对话内容，生成一段简洁的总结（150-300字）。请使用中文输出（专有名词除外）。
+重点描述：做了什么、为什么这样做、结果如何。
+
+对话内容：
+{conversation}"""
+
+        else:  # mixed
+            return f"""基于以下对话内容，生成摘要。请使用中文输出（专有名词除外）。格式如下：
+
+## 概述
+[2-3句话总结本次会话]
+
+## 关键点
+- [要点 1]
+- [要点 2]
+- [要点 3]
+...
+
+对话内容：
+{conversation}"""
+
     def parse_session_file_full(self, session_path: Path) -> list:
         """Parse a session JSONL file and extract full messages with tool results.
 
@@ -477,8 +588,8 @@ Slug:"""
                             "timestamp": entry.get("timestamp")
                         })
 
-        # Apply message limit (0 = no limit)
-        if max_messages > 0 and len(messages) > max_messages:
+        # Apply message limit (0 or None = no limit)
+        if max_messages and max_messages > 0 and len(messages) > max_messages:
             messages = messages[-max_messages:]
 
         return messages
@@ -560,6 +671,11 @@ Slug:"""
     def _generate_markdown(self, messages: list, project: str) -> str:
         """Generate markdown content for the summary memory file."""
         now = datetime.now()
+        summary_config = self.config.get("summary", {})
+        summary_format = summary_config.get("format", "structured")
+
+        # 尝试生成 AI 摘要
+        ai_summary = self.generate_summary(messages)
 
         # YAML frontmatter
         lines = [
@@ -569,29 +685,42 @@ Slug:"""
             "source: claude-code",
             f"messages: {len(messages)}",
             f"content_scope: {self.memory_config.get('contentScope', 'standard')}",
+            f"summary_format: {summary_format}",
+            f"has_ai_summary: {ai_summary is not None}",
             "type: summary",
             "---",
             "",
-            f"# Session: {now.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"# 会话记录: {now.strftime('%Y-%m-%d %H:%M:%S')}",
             "",
-            "## Metadata",
-            f"- **Project**: {project}",
-            f"- **Working Directory**: {os.getcwd()}",
-            f"- **Messages**: {len(messages)}",
-            "",
-            "## Conversation",
+            "## 元数据",
+            f"- **项目**: {project}",
+            f"- **工作目录**: {os.getcwd()}",
+            f"- **消息数**: {len(messages)}",
             ""
         ]
 
-        # Add messages
+        # 添加 AI 生成的摘要
+        if ai_summary:
+            lines.append("# AI 摘要")
+            lines.append("")
+            lines.append(ai_summary)
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+
+        # 添加原始对话
+        lines.append("# 原始对话")
+        lines.append("")
+
         for msg in messages:
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
+            role_cn = {"user": "用户", "assistant": "助手", "tool": "工具"}.get(role, role)
 
             if role == "tool":
-                lines.append(f"**[Tool: {msg.get('tool_name', 'unknown')}]**: {content}")
+                lines.append(f"**[工具: {msg.get('tool_name', 'unknown')}]**: {content}")
             else:
-                lines.append(f"**{role}**: {content}")
+                lines.append(f"**{role_cn}**: {content}")
             lines.append("")
 
         return "\n".join(lines)

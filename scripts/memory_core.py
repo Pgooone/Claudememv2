@@ -58,6 +58,11 @@ def load_config():
             "includeToolCalls": True,
             "maxMessages": 25,
             "cleanupDays": 90
+        },
+        "summary": {
+            "enabled": True,
+            "format": "structured",
+            "timing": "on_save"
         }
     }
 
@@ -68,7 +73,14 @@ def load_config():
                 # Merge with defaults
                 for key in default_config:
                     if key in user_config:
-                        default_config[key].update(user_config[key])
+                        if isinstance(default_config[key], dict):
+                            default_config[key].update(user_config[key])
+                        else:
+                            default_config[key] = user_config[key]
+                # Also copy any extra keys from user config
+                for key in user_config:
+                    if key not in default_config:
+                        default_config[key] = user_config[key]
                 return default_config
         except Exception as e:
             print(f"Warning: Could not load config: {e}", file=sys.stderr)
@@ -217,6 +229,30 @@ def cmd_status(args):
     print(f"  Model: {model_str}")
     print(f"  Content scope: {config['memory']['contentScope']}")
     print(f"  Max messages: {config['memory']['maxMessages'] or 'unlimited'}")
+
+    # 显示摘要配置
+    summary_config = config.get("summary", {})
+    summary_enabled = summary_config.get("enabled", True)
+    summary_format = summary_config.get("format", "structured")
+    summary_timing = summary_config.get("timing", "on_save")
+
+    format_names = {
+        "structured": "结构化",
+        "freeform": "自由格式",
+        "mixed": "混合格式"
+    }
+    timing_names = {
+        "on_save": "保存时生成",
+        "async": "异步生成",
+        "on_demand": "按需生成",
+        "disabled": "禁用"
+    }
+
+    if summary_enabled and summary_timing != "disabled":
+        print(f"  Summary format: {format_names.get(summary_format, summary_format)}")
+        print(f"  Summary timing: {timing_names.get(summary_timing, summary_timing)}")
+    else:
+        print(f"  Summary: disabled")
 
 
 def cmd_cleanup(args):
