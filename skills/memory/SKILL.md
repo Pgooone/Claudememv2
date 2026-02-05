@@ -26,6 +26,46 @@ triggers:
 
 此技能提供对 Claudememv2 记忆系统的自然语言访问。
 
+## 重要：执行方式
+
+**必须通过 Python 脚本执行所有操作，不要自行实现逻辑。**
+
+### 脚本位置
+
+首先使用 Glob 工具查找脚本路径：
+- Windows: `C:\Users\*\.claude\plugins\cache\Claudememv2\Claudememv2\*\scripts\memory_core.py`
+- Unix: `~/.claude/plugins/cache/Claudememv2/Claudememv2/*/scripts/memory_core.py`
+
+或者直接使用以下路径模式（选择最新版本）：
+```
+# Windows
+%USERPROFILE%\.claude\plugins\cache\Claudememv2\Claudememv2\<version>\scripts\memory_core.py
+
+# Unix
+~/.claude/plugins/cache/Claudememv2/Claudememv2/<version>/scripts/memory_core.py
+```
+
+### 执行命令
+
+找到脚本路径后，使用 Bash 工具执行：
+
+```bash
+# 保存
+python "<script_path>" save
+
+# 搜索
+python "<script_path>" search "<query>"
+
+# 索引
+python "<script_path>" index
+
+# 状态
+python "<script_path>" status
+
+# 清理
+python "<script_path>" cleanup
+```
+
 ## 触发词检测
 
 当用户消息匹配以下任何模式时，激活此技能：
@@ -46,75 +86,40 @@ triggers:
 - 中文："记忆状态"、"查看记忆"、"记忆库状态"
 - 英文："memory status"、"show memory"、"memory info"
 
-## 操作
+## 操作流程
 
 ### 保存触发时
 
-执行记忆保存流程：
+1. 使用 Glob 工具查找 `memory_core.py` 脚本路径
+2. 使用 Bash 工具执行：`python "<script_path>" save`
+3. 将脚本输出展示给用户
 
-1. 获取当前工作目录
-2. 从目录提取项目名称
-3. 定位 Claude Code 会话文件
-4. 根据配置解析和过滤消息
-5. 通过 Claude API 生成 slug
-6. 保存到 `~/.claude/Claudememv2-data/memory/<project>/YYYY-MM-DD-slug.md`
-7. 更新索引
-
-**响应：**
+**预期输出：**
 ```
-✓ 会话已保存到记忆
-  文件：<file_path>
-  消息数：<count>
-  项目：<project>
+[OK] Session saved to memory
+  File: <file_path>
+  Messages: <count>
+  Project: <project>
 ```
 
 ### 搜索触发时
 
-从用户消息提取查询并搜索：
-
-1. 从消息解析查询（例如："搜索记忆：API设计" → 查询 = "API设计"）
-2. 使用查询调用搜索引擎
-3. 返回格式化结果
-
-**响应：**
-```
-🔍 搜索结果（查询："<query>"）
-
-1. [<score>] <file>:<lines>
-   "<excerpt>..."
-
-2. ...
-```
+1. 从用户消息提取查询（例如："搜索记忆：API设计" → 查询 = "API设计"）
+2. 使用 Glob 工具查找脚本路径
+3. 使用 Bash 工具执行：`python "<script_path>" search "<query>"`
+4. 将脚本输出展示给用户
 
 ### 索引触发时
 
-执行索引更新：
-
-1. 扫描记忆目录
-2. 索引新增/修改的文件
-3. 报告结果
-
-**响应：**
-```
-📚 记忆索引已更新
-  扫描文件：<count>
-  新增索引：<new>
-  总分块数：<chunks>
-```
+1. 使用 Glob 工具查找脚本路径
+2. 使用 Bash 工具执行：`python "<script_path>" index`
+3. 将脚本输出展示给用户
 
 ### 状态触发时
 
-显示记忆系统状态：
-
-**响应：**
-```
-📊 Claudememv2 记忆库状态
-  项目数：<projects>
-  文件数：<files>
-  总大小：<size>
-  最近更新：<date>
-  模型：<model>
-```
+1. 使用 Glob 工具查找脚本路径
+2. 使用 Bash 工具执行：`python "<script_path>" status`
+3. 将脚本输出展示给用户
 
 ## 配置
 
@@ -122,4 +127,4 @@ triggers:
 
 ## 错误处理
 
-如果任何操作失败，根据触发语言（从触发词检测）提供相应语言的错误消息。
+如果脚本执行失败，将错误信息展示给用户。根据触发语言（从触发词检测）提供相应语言的错误消息。
