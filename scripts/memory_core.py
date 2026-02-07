@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import sys
+import shutil
 from pathlib import Path
 from datetime import datetime
 
@@ -22,6 +23,9 @@ if sys.platform == "win32":
 # Import submodules
 from session_parser import SessionParser
 from search_engine import SearchEngine
+from logger import setup_logger
+
+log = setup_logger("claudememv2.core")
 
 
 def get_config_path():
@@ -83,6 +87,7 @@ def load_config():
                         default_config[key] = user_config[key]
                 return default_config
         except Exception as e:
+            log.warning("Could not load config from %s: %s", config_path, e)
             print(f"Warning: Could not load config: {e}", file=sys.stderr)
 
     return default_config
@@ -107,11 +112,13 @@ def cmd_save(args):
 
     try:
         result = parser.save_session(args.project)
+        log.info("Session saved: %s (%d messages, project=%s)", result['file_path'], result['message_count'], result['project'])
         print(f"[OK] Session saved to memory")
         print(f"  File: {result['file_path']}")
         print(f"  Messages: {result['message_count']}")
         print(f"  Project: {result['project']}")
     except Exception as e:
+        log.error("Error saving session: %s", e, exc_info=True)
         print(f"[ERROR] Error saving session: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -133,11 +140,13 @@ def cmd_search(args):
             print(f"[SEARCH] No matching memories found for: \"{args.query}\"")
             return
 
+        log.info("Search completed: query='%s', results=%d", args.query, len(results))
         print(f"[SEARCH] Search results (query: \"{args.query}\")\n")
         for i, result in enumerate(results, 1):
             print(f"{i}. [{result['score']:.2f}] {result['file']}:{result['lines']}")
             print(f"   \"{result['excerpt'][:100]}...\"\n")
     except Exception as e:
+        log.error("Error searching: %s", e, exc_info=True)
         print(f"[ERROR] Error searching: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -149,12 +158,14 @@ def cmd_index(args):
 
     try:
         result = engine.index(force=args.force)
+        log.info("Index updated: scanned=%d, new=%d, updated=%d, chunks=%d", result['scanned'], result['new'], result['updated'], result['chunks'])
         print(f"[INDEX] Memory index updated")
         print(f"  Files scanned: {result['scanned']}")
         print(f"  New indexed: {result['new']}")
         print(f"  Updated: {result['updated']}")
         print(f"  Total chunks: {result['chunks']}")
     except Exception as e:
+        log.error("Error indexing: %s", e, exc_info=True)
         print(f"[ERROR] Error indexing: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -338,6 +349,140 @@ def cmd_config(args):
         print(f"[OK] Config updated: {args.key} = {config[section][key]}")
 
 
+def cmd_export(args):
+    """Export memories to Markdown or JSON format."""
+    config = load_config()
+    data_dir = Path(config["memory"]["dataDir"]).expanduser()
+    memory_dir = data_dir / "memory"
+
+    if not memory_dir.exists():
+        print("[ERROR] No memories found. Memory directory does not exist.", file=sys.stderr)
+        sys.exit(1)
+
+    # Collect target project directories
+    project_dirs = []
+    if args.project:
+        target = memory_dir / args.project
+        if not target.exists():
+            print(f"[ERROR] Project '{args.project}' not found.", file=sys.stderr)
+            sys.exit(1)
+        project_dirs.append(target)
+    else:
+        for d in sorted(memory_dir.iterdir()):
+            if d.is_dir():
+                project_dirs.append(d)
+
+    if not project_dirs:
+        print("[ERROR] No projects found in memory.", file=sys.stderr)
+        sys.exit(1)
+
+    # Determine source: summary (default) or full
+    use_full = args.full
+
+    # Collect all memory files
+    memories = []
+    for project_dir in project_dirs:
+        project_name = project_dir.name
+        source_dir = project_dir / "full" if use_full else project_dir
+        if use_full and not source_dir.exists():
+            source_dir = project_dir  # fallback to summary
+
+        for md_file in sorted(source_dir.glob("*.md")):
+            try:
+                content = md_file.read_text(encoding="utf-8")
+                stat = md_file.stat()
+                memories.append({
+                    "project": project_name,
+                    "filename": md_file.name,
+                    "path": str(md_file),
+                    "content": content,
+                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "size": stat.st_size,
+                })
+            except (OSError, PermissionError) as e:
+                print(f"  Warning: Could not read {md_file}: {e}", file=sys.stderr)
+
+    if not memories:
+        print("[ERROR] No memory files found to export.", file=sys.stderr)
+        sys.exit(1)
+
+    # Determine output path
+    fmt = args.format
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        suffix = "full" if use_full else "summary"
+        if args.project:
+            output_path = Path(f"claudememv2-export-{args.project}-{suffix}-{timestamp}.{fmt}")
+        else:
+            output_path = Path(f"claudememv2-export-all-{suffix}-{timestamp}.{fmt}")
+
+    try:
+        if fmt == "json":
+            _export_json(memories, output_path)
+        else:
+            _export_markdown(memories, output_path)
+
+        log.info("Export completed: format=%s, files=%d, output=%s", fmt, len(memories), output_path)
+        print(f"[OK] Memories exported successfully")
+        print(f"  Format: {fmt}")
+        print(f"  Source: {'full conversations' if use_full else 'summaries'}")
+        print(f"  Files: {len(memories)}")
+        print(f"  Projects: {len(project_dirs)}")
+        print(f"  Output: {output_path}")
+    except (OSError, PermissionError) as e:
+        log.error("Failed to write export file: %s", e, exc_info=True)
+        print(f"[ERROR] Failed to write export file: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _export_markdown(memories, output_path):
+    """Export memories as a single Markdown document."""
+    lines = []
+    lines.append("# Claudememv2 Memory Export")
+    lines.append(f"\n> Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"> Total files: {len(memories)}\n")
+
+    current_project = None
+    for mem in memories:
+        if mem["project"] != current_project:
+            current_project = mem["project"]
+            lines.append(f"\n---\n\n## Project: {current_project}\n")
+
+        lines.append(f"### {mem['filename']}\n")
+        lines.append(f"*Modified: {mem['modified'][:10]} | Size: {mem['size']} bytes*\n")
+        lines.append(mem["content"])
+        lines.append("\n")
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _export_json(memories, output_path):
+    """Export memories as a JSON file."""
+    export_data = {
+        "exported_at": datetime.now().isoformat(),
+        "total_files": len(memories),
+        "projects": {},
+    }
+
+    for mem in memories:
+        project = mem["project"]
+        if project not in export_data["projects"]:
+            export_data["projects"][project] = []
+        export_data["projects"][project].append({
+            "filename": mem["filename"],
+            "created": mem["created"],
+            "modified": mem["modified"],
+            "size": mem["size"],
+            "content": mem["content"],
+        })
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(export_data, f, indent=2, ensure_ascii=False)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Claudememv2 - Intelligent memory system for Claude Code"
@@ -381,6 +526,14 @@ def main():
     config_parser.add_argument("key", nargs="?", help="Config key")
     config_parser.add_argument("value", nargs="?", help="New value")
     config_parser.set_defaults(func=cmd_config)
+
+    # export command
+    export_parser = subparsers.add_parser("export", help="Export memories to file")
+    export_parser.add_argument("--format", "-f", choices=["md", "json"], default="md", help="Export format (default: md)")
+    export_parser.add_argument("--project", "-p", help="Export specific project only")
+    export_parser.add_argument("--output", "-o", help="Output file path")
+    export_parser.add_argument("--full", action="store_true", help="Export full conversations instead of summaries")
+    export_parser.set_defaults(func=cmd_export)
 
     args = parser.parse_args()
 

@@ -169,6 +169,39 @@ description: Claudememv2 记忆管理命令 - 保存、搜索、索引、状态�
 
 ---
 
+### /memory export
+
+将记忆导出为 Markdown 合集或 JSON 文件。
+
+**用法：**
+```
+/memory export [选项]
+```
+
+**选项：**
+- `--format md|json` - 导出格式（默认：md）
+- `--project <名称>` - 仅导出指定项目
+- `--output <路径>` - 指定输出文件路径
+- `--full` - 导出完整对话而非摘要
+
+**流程：**
+1. 扫描 `~/.claude/Claudememv2-data/memory/` 目录
+2. 按项目收集所有记忆文件
+3. 根据格式选项生成导出文件
+4. 写入到指定路径或当前目录
+
+**输出：**
+```
+✓ 记忆导出成功
+  格式：md
+  来源：summaries
+  文件数：27
+  项目数：3
+  输出：claudememv2-export-all-summary-20260207-143000.md
+```
+
+---
+
 ## 错误处理
 
 | 错误 | 消息 |

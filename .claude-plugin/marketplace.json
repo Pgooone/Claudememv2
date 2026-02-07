@@ -5,14 +5,14 @@
     "email": "pgooone@users.noreply.github.com"
   },
   "metadata": {
-    "description": "Claude Code 智能记忆系统 - 保存对话、语义搜索、跨会话知识检索",
-    "version": "2.1.0"
+    "description": "Claude Code 智能记忆系统 - 保存对话、AI 摘要、语义搜索、跨会话知识检索",
+    "version": "2.2.5"
   },
   "plugins": [
     {
       "name": "Claudememv2",
       "source": "./",
-      "description": "将 Claude Code 对话保存到可搜索的记忆库。功能：使用 /memory save 手动保存、使用 Claude API 语义搜索、按项目组织、可配置内容范围。",
+      "description": "将 Claude Code 对话保存到可搜索的记忆库。功能：使用 /memory save 手动保存、AI 摘要生成、使用 Claude API 语义搜索、按项目组织、记忆导出、可配置内容范围。",
       "category": "productivity",
       "tags": [
         "memory",

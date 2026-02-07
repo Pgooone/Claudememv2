@@ -8,6 +8,8 @@ Claudememv2 是一个为 Claude Code 设计的智能记忆系统插件，支持�
 - 将对话保存到可搜索的记忆库
 - 使用 Claude API 进行语义搜索
 - 按项目组织记忆
+- 导出记忆为 Markdown 或 JSON
+- 操作日志记录
 
 ## 目录结构
 
@@ -26,6 +28,7 @@ Claudememv2/
 │   ├── memory_core.py       # 主入口
 │   ├── session_parser.py    # 会话解析器
 │   ├── search_engine.py     # 搜索实现
+│   ├── logger.py            # 日志模块
 │   └── requirements.txt
 ├── docs/                    # 文档
 │   ├── alternatives.md      # 备选方案
@@ -39,6 +42,7 @@ Claudememv2/
 - `scripts/memory_core.py` - 主 CLI 入口
 - `scripts/session_parser.py` - 解析 Claude Code 会话文件
 - `scripts/search_engine.py` - 使用 Claude API 的语义搜索
+- `scripts/logger.py` - 统一日志模块
 - `commands/memory.md` - 定义 /memory 命令行为
 
 ## 开发说明
@@ -46,6 +50,7 @@ Claudememv2/
 - 使用 Claude API 进行语义搜索（可配置模型）
 - 从 `~/.claude/projects/` 读取 Claude Code 会话
 - 记忆存储在 `~/.claude/Claudememv2-data/`
+- 日志存储在 `~/.claude/Claudememv2-data/logs/memory.log`
 - SQLite + FTS5 用于全文搜索
 
 ## 测试
@@ -59,4 +64,7 @@ python scripts/memory_core.py search "测试查询"
 
 # 测试状态
 python scripts/memory_core.py status
+
+# 测试导出
+python scripts/memory_core.py export --format json --output test.json
 ```

@@ -19,6 +19,10 @@ try:
 except ImportError:
     HAS_ANTHROPIC = False
 
+from logger import setup_logger
+
+log = setup_logger("claudememv2.parser")
+
 
 class SessionParser:
     """Parse Claude Code sessions and save to memory."""
@@ -92,6 +96,7 @@ class SessionParser:
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
+                    log.debug("Skipping malformed JSON line in session file: %s", session_path)
                     continue
 
                 # Claude Code session format: type is "user" or "assistant"
@@ -315,7 +320,8 @@ Slug:"""
 
             return slug if slug else datetime.now().strftime("%H%M")
 
-        except Exception:
+        except Exception as e:
+            log.warning("Failed to generate slug via API: %s", e)
             return datetime.now().strftime("%H%M")
 
     def _get_model(self) -> str:
@@ -355,8 +361,8 @@ Slug:"""
                     # Legacy format support
                     if "model" in settings:
                         return settings["model"]
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Could not read Claude Code settings for model: %s", e)
 
         return self.model_config.get("fallback", "claude-3-haiku-20240307")
 
@@ -394,6 +400,7 @@ Slug:"""
             return response.content[0].text
         except Exception as e:
             # API 调用失败时返回 None，仍保存原始对话
+            log.warning("Failed to generate summary via API: %s", e)
             return None
 
     def _format_conversation_for_summary(self, messages: list) -> str:
@@ -495,6 +502,7 @@ Slug:"""
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
+                    log.debug("Skipping malformed JSON line in full parse: %s", session_path)
                     continue
 
                 entry_type = entry.get("type")
@@ -600,6 +608,8 @@ Slug:"""
         session_path = self.find_current_session()
         if session_path is None:
             raise ValueError("No current session found. Please have a conversation first.")
+
+        log.info("Parsing session file: %s", session_path)
 
         # Parse messages for summary
         messages = self.parse_session_file(session_path)

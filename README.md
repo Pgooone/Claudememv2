@@ -11,9 +11,11 @@
 - **AI 摘要生成**：使用 Claude API 自动生成结构化对话摘要
 - **保存对话**：手动将 Claude Code 会话保存到可搜索的记忆库
 - **语义搜索**：使用 Claude API 进行智能语义匹配搜索
+- **记忆导出**：支持导出为 Markdown 合集或 JSON 格式
 - **项目组织**：记忆按项目自动分类存储
 - **可配置内容**：选择保存内容（消息、工具调用、思考过程）
 - **自然语言**：支持命令和自然语言触发
+- **日志系统**：操作日志记录，便于排查问题
 
 ## 安装
 
@@ -55,6 +57,7 @@ git clone https://github.com/Pgooone/Claudememv2.git
 | `/Claudememv2:memory status` | 查看记忆系统状态 |
 | `/Claudememv2:memory cleanup` | 清理旧记忆 |
 | `/Claudememv2:memory config` | 查看或修改配置 |
+| `/Claudememv2:memory export` | 导出记忆为 Markdown 或 JSON |
 
 ### 自然语言触发
 
@@ -145,6 +148,7 @@ git clone https://github.com/Pgooone/Claudememv2.git
 │       └── ...
 ├── memory.sqlite
 └── logs/
+    └── memory.log                     # 操作日志
 ```
 
 ### 摘要文件示例
@@ -220,9 +224,11 @@ Intelligent memory system for Claude Code - save conversations, AI summary gener
 - **AI Summary Generation**: Automatically generate structured conversation summaries using Claude API
 - **Save Conversations**: Manually save Claude Code sessions to searchable memory
 - **Semantic Search**: Find relevant memories using Claude API for intelligent matching
+- **Memory Export**: Export memories as Markdown collection or JSON format
 - **Project Organization**: Memories automatically organized by project
 - **Configurable Content**: Choose what to save (messages, tool calls, thinking process)
 - **Natural Language**: Use commands or natural language triggers
+- **Logging System**: Operation logs for troubleshooting
 
 ## Installation
 
@@ -264,6 +270,7 @@ git clone https://github.com/Pgooone/Claudememv2.git
 | `/Claudememv2:memory status` | View memory system status |
 | `/Claudememv2:memory cleanup` | Clean up old memories |
 | `/Claudememv2:memory config` | View or modify configuration |
+| `/Claudememv2:memory export` | Export memories to Markdown or JSON |
 
 ### Natural Language
 
@@ -354,6 +361,7 @@ Memories are stored at `~/.claude/Claudememv2-data/`:
 │       └── ...
 ├── memory.sqlite
 └── logs/
+    └── memory.log                     # 操作日志
 ```
 
 ### Summary File Example

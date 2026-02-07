@@ -19,6 +19,10 @@ try:
 except ImportError:
     HAS_ANTHROPIC = False
 
+from logger import setup_logger
+
+log = setup_logger("claudememv2.search")
+
 
 class SearchEngine:
     """Search engine for memory files using Claude API."""
@@ -117,8 +121,8 @@ class SearchEngine:
                     # Legacy format support
                     if "model" in settings:
                         return settings["model"]
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Could not read Claude Code settings for model: %s", e)
 
         return self.model_config.get("fallback", "claude-3-haiku-20240307")
 
@@ -192,6 +196,8 @@ class SearchEngine:
         """Index memory files based on searchScope config."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+
+        log.info("Starting index operation (force=%s)", force)
 
         scanned = 0
         new_indexed = 0
@@ -334,8 +340,8 @@ class SearchEngine:
             for row in cursor.fetchall():
                 # BM25 returns negative scores, lower is better
                 fts_scores[row[0]] = -row[1]
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("FTS search failed (may need indexing): %s", e)
 
         conn.close()
 
@@ -420,6 +426,7 @@ Scores:"""
 
         except Exception as e:
             # Fallback to FTS only on error
+            log.warning("Semantic search failed, falling back to FTS: %s", e)
             results = []
             for chunk in chunks:
                 fts_score = fts_scores.get(chunk[0], 0)
