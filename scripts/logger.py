@@ -25,13 +25,11 @@ def setup_logger(name: str = "claudememv2") -> logging.Logger:
 
     logger.setLevel(logging.DEBUG)
 
-    # Determine log directory
-    if sys.platform == "win32":
-        base = Path(os.environ.get("USERPROFILE", "")) if os.environ.get("USERPROFILE") else Path.home()
-    else:
-        base = Path.home()
+    # Import here to avoid circular dependency
+    from utils import get_home_dir
 
-    log_dir = base / ".claude" / "Claudememv2-data" / "logs"
+    # Determine log directory
+    log_dir = get_home_dir() / ".claude" / "Claudememv2-data" / "logs"
 
     try:
         log_dir.mkdir(parents=True, exist_ok=True)

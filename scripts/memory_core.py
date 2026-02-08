@@ -24,26 +24,19 @@ if sys.platform == "win32":
 from session_parser import SessionParser
 from search_engine import SearchEngine
 from logger import setup_logger
+from utils import get_home_dir, get_model
 
 log = setup_logger("claudememv2.core")
 
 
 def get_config_path():
     """Get the configuration file path."""
-    if sys.platform == "win32":
-        base = Path(os.environ.get("USERPROFILE", ""))
-    else:
-        base = Path.home()
-    return base / ".claude" / "plugins" / "Claudememv2" / "config.json"
+    return get_home_dir() / ".claude" / "plugins" / "Claudememv2" / "config.json"
 
 
 def get_data_dir():
     """Get the data directory path."""
-    if sys.platform == "win32":
-        base = Path(os.environ.get("USERPROFILE", ""))
-    else:
-        base = Path.home()
-    return base / ".claude" / "Claudememv2-data"
+    return get_home_dir() / ".claude" / "Claudememv2-data"
 
 
 def load_config():
@@ -117,6 +110,12 @@ def cmd_save(args):
         print(f"  File: {result['file_path']}")
         print(f"  Messages: {result['message_count']}")
         print(f"  Project: {result['project']}")
+
+        # Index the new memory
+        try:
+            SearchEngine(config).index()
+        except Exception as index_error:
+            log.warning("Failed to index after save: %s", index_error)
     except Exception as e:
         log.error("Error saving session: %s", e, exc_info=True)
         print(f"[ERROR] Error saving session: {e}", file=sys.stderr)
@@ -201,36 +200,11 @@ def cmd_status(args):
     else:
         size_str = f"{total_size / (1024 * 1024):.1f} MB"
 
-    # Get model info - read actual model from Claude Code settings
+    # Get model info
     model_source = config["model"]["source"]
-    model_str = config["model"].get("fallback", "unknown")
-
-    try:
-        if sys.platform == "win32":
-            settings_path = Path(os.environ.get("USERPROFILE", "")) / ".claude" / "settings.json"
-        else:
-            settings_path = Path.home() / ".claude" / "settings.json"
-
-        if settings_path.exists():
-            with open(settings_path, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-                env = settings.get("env", {})
-
-                model_map = {
-                    "inherit": "ANTHROPIC_MODEL",
-                    "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-                    "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-                    "opus": "ANTHROPIC_DEFAULT_OPUS_MODEL",
-                }
-
-                if model_source == "custom":
-                    model_str = config["model"].get("customModelId", model_str)
-                elif model_source in model_map and model_map[model_source] in env:
-                    model_str = f"{env[model_map[model_source]]} ({model_source})"
-                elif "ANTHROPIC_MODEL" in env:
-                    model_str = f"{env['ANTHROPIC_MODEL']} (inherit)"
-    except Exception:
-        pass
+    model_str = get_model(config["model"])
+    if model_source != "custom":
+        model_str = f"{model_str} ({model_source})"
 
     print(f"[STATUS] Claudememv2 Memory Status")
     print(f"  Projects: {projects}")
@@ -276,26 +250,58 @@ def cmd_cleanup(args):
     cutoff = datetime.now().timestamp() - (days * 24 * 60 * 60)
 
     deleted = 0
+    deleted_full = 0
     freed = 0
     remaining = 0
 
     if memory_dir.exists():
         for project_dir in memory_dir.iterdir():
             if project_dir.is_dir():
+                full_dir = project_dir / "full"
                 for md_file in project_dir.glob("*.md"):
                     if md_file.stat().st_mtime < cutoff:
                         if not args.dry_run:
                             freed += md_file.stat().st_size
                             md_file.unlink()
                         deleted += 1
+
+                        # Also delete corresponding full/ file
+                        if full_dir.exists():
+                            full_file = full_dir / md_file.name
+                            if full_file.exists():
+                                if not args.dry_run:
+                                    freed += full_file.stat().st_size
+                                    full_file.unlink()
+                                deleted_full += 1
                     else:
                         remaining += 1
+
+    # Clean up orphaned SQLite records
+    if not args.dry_run:
+        import sqlite3
+        db_path = data_dir / "memory.sqlite"
+        if db_path.exists():
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT path FROM files")
+            orphaned = []
+            for (rel_path,) in cursor.fetchall():
+                if not (memory_dir / rel_path).exists():
+                    orphaned.append(rel_path)
+
+            if orphaned:
+                cursor.execute(f"DELETE FROM chunks WHERE file_path IN ({','.join('?' * len(orphaned))})", orphaned)
+                cursor.execute(f"DELETE FROM files WHERE path IN ({','.join('?' * len(orphaned))})", orphaned)
+                cursor.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
+                conn.commit()
+            conn.close()
 
     if args.dry_run:
         print(f"[CLEANUP] Memory cleanup preview (dry run)")
     else:
         print(f"[CLEANUP] Memory cleanup complete")
-    print(f"  Files {'to delete' if args.dry_run else 'deleted'}: {deleted}")
+    print(f"  Summary files {'to delete' if args.dry_run else 'deleted'}: {deleted}")
+    print(f"  Full files {'to delete' if args.dry_run else 'deleted'}: {deleted_full}")
     print(f"  Space {'to free' if args.dry_run else 'freed'}: {freed / 1024:.1f} KB")
     print(f"  Remaining files: {remaining}")
 

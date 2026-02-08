@@ -20,6 +20,7 @@ except ImportError:
     HAS_ANTHROPIC = False
 
 from logger import setup_logger
+from utils import get_home_dir, get_model
 
 log = setup_logger("claudememv2.parser")
 
@@ -39,11 +40,7 @@ class SessionParser:
 
     def get_claude_projects_dir(self) -> Path:
         """Get Claude Code projects directory."""
-        if os.name == "nt":
-            base = Path(os.environ.get("USERPROFILE", ""))
-        else:
-            base = Path.home()
-        return base / ".claude" / "projects"
+        return get_home_dir() / ".claude" / "projects"
 
     def find_current_session(self, working_dir: Optional[str] = None) -> Optional[Path]:
         """Find the most recent session file for current/specified project."""
@@ -56,27 +53,35 @@ class SessionParser:
         if working_dir is None:
             working_dir = os.getcwd()
 
-        # Claude Code uses a hash of the project path
-        # We need to find the matching project directory
+        # Convert working path to Claude Code project directory format
         working_path = Path(working_dir).resolve()
+        expected_project_name = str(working_path).replace(os.sep, "-")
 
-        # Search for matching project
+        # Search for matching project first
         latest_session = None
         latest_time = 0
+        matched_session = None
+        matched_time = 0
 
         for project_dir in projects_dir.iterdir():
             if not project_dir.is_dir():
                 continue
 
-            # Session files are directly in project directory (not in sessions/ subdirectory)
-            # Look for .jsonl files directly in project_dir
+            is_match = project_dir.name == expected_project_name
+
             for session_file in project_dir.glob("*.jsonl"):
                 mtime = session_file.stat().st_mtime
+
+                if is_match and mtime > matched_time:
+                    matched_time = mtime
+                    matched_session = session_file
+
                 if mtime > latest_time:
                     latest_time = mtime
                     latest_session = session_file
 
-        return latest_session
+        # Return matched project session if found, otherwise fallback to global latest
+        return matched_session if matched_session else latest_session
 
     def parse_session_file(self, session_path: Path) -> list:
         """Parse a session JSONL file and extract messages."""
@@ -292,7 +297,7 @@ class SessionParser:
 
         try:
             # Get model from config
-            model = self._get_model()
+            model = get_model(self.model_config)
 
             client = anthropic.Anthropic()
             response = client.messages.create(
@@ -324,48 +329,6 @@ Slug:"""
             log.warning("Failed to generate slug via API: %s", e)
             return datetime.now().strftime("%H%M")
 
-    def _get_model(self) -> str:
-        """Get the model to use from config."""
-        source = self.model_config.get("source", "inherit")
-
-        if source == "custom" and self.model_config.get("customModelId"):
-            return self.model_config["customModelId"]
-
-        # Try to read from Claude Code settings
-        try:
-            if os.name == "nt":
-                settings_path = Path(os.environ.get("USERPROFILE", "")) / ".claude" / "settings.json"
-            else:
-                settings_path = Path.home() / ".claude" / "settings.json"
-
-            if settings_path.exists():
-                with open(settings_path, "r", encoding="utf-8") as f:
-                    settings = json.load(f)
-                    env = settings.get("env", {})
-
-                    # Map source to environment variable
-                    model_map = {
-                        "inherit": "ANTHROPIC_MODEL",
-                        "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-                        "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-                        "opus": "ANTHROPIC_DEFAULT_OPUS_MODEL",
-                    }
-
-                    if source in model_map and model_map[source] in env:
-                        return env[model_map[source]]
-
-                    # Fallback to ANTHROPIC_MODEL if source not found
-                    if "ANTHROPIC_MODEL" in env:
-                        return env["ANTHROPIC_MODEL"]
-
-                    # Legacy format support
-                    if "model" in settings:
-                        return settings["model"]
-        except Exception as e:
-            log.debug("Could not read Claude Code settings for model: %s", e)
-
-        return self.model_config.get("fallback", "claude-3-haiku-20240307")
-
     def generate_summary(self, messages: list) -> Optional[str]:
         """使用 Claude API 生成对话摘要。"""
         summary_config = self.config.get("summary", {})
@@ -390,7 +353,7 @@ Slug:"""
         prompt = self._get_summary_prompt(format_type, conversation)
 
         try:
-            model = self._get_model()
+            model = get_model(self.model_config)
             client = anthropic.Anthropic()
             response = client.messages.create(
                 model=model,

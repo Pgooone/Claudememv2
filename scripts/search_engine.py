@@ -20,6 +20,7 @@ except ImportError:
     HAS_ANTHROPIC = False
 
 from logger import setup_logger
+from utils import get_model
 
 log = setup_logger("claudememv2.search")
 
@@ -83,48 +84,6 @@ class SearchEngine:
 
         conn.commit()
         conn.close()
-
-    def _get_model(self) -> str:
-        """Get the model to use from config."""
-        source = self.model_config.get("source", "inherit")
-
-        if source == "custom" and self.model_config.get("customModelId"):
-            return self.model_config["customModelId"]
-
-        # Try to read from Claude Code settings
-        try:
-            if os.name == "nt":
-                settings_path = Path(os.environ.get("USERPROFILE", "")) / ".claude" / "settings.json"
-            else:
-                settings_path = Path.home() / ".claude" / "settings.json"
-
-            if settings_path.exists():
-                with open(settings_path, "r", encoding="utf-8") as f:
-                    settings = json.load(f)
-                    env = settings.get("env", {})
-
-                    # Map source to environment variable
-                    model_map = {
-                        "inherit": "ANTHROPIC_MODEL",
-                        "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-                        "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-                        "opus": "ANTHROPIC_DEFAULT_OPUS_MODEL",
-                    }
-
-                    if source in model_map and model_map[source] in env:
-                        return env[model_map[source]]
-
-                    # Fallback to ANTHROPIC_MODEL if source not found
-                    if "ANTHROPIC_MODEL" in env:
-                        return env["ANTHROPIC_MODEL"]
-
-                    # Legacy format support
-                    if "model" in settings:
-                        return settings["model"]
-        except Exception as e:
-            log.debug("Could not read Claude Code settings for model: %s", e)
-
-        return self.model_config.get("fallback", "claude-3-haiku-20240307")
 
     def _compute_hash(self, content: str) -> str:
         """Compute SHA256 hash of content."""
@@ -367,7 +326,7 @@ class SearchEngine:
     def _semantic_search(self, query: str, chunks: list, fts_scores: dict, limit: int, threshold: float) -> list:
         """Use Claude API for semantic search."""
         try:
-            model = self._get_model()
+            model = get_model(self.model_config)
             client = anthropic.Anthropic()
 
             # Prepare chunks for evaluation (limit to avoid token limits)

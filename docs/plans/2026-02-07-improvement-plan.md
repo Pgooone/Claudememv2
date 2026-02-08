@@ -2,7 +2,7 @@
 
 > 日期：2026-02-07
 > 版本：v2.2.4 → v2.2.5
-> 状态：迭代 4/5/7 已完成，其余待完善
+> 状态：Bug 1 已修复（P1-1/P1-2），迭代 4/5/7 已完成；其余见 2026-02-08-comprehensive-review.md
 
 ## 一、Bug 修复（高优先级）
 
@@ -17,6 +17,7 @@ base = Path(os.environ.get("USERPROFILE", ""))
 # 修复后
 base = Path(os.environ.get("USERPROFILE", "")) if os.environ.get("USERPROFILE") else Path.home()
 ```
+- **状态**：✅ 已修复（2026-02-08，提取到 utils.py 的 get_home_dir()）
 
 ### Bug 2：API 响应格式假设
 - **文件**：`session_parser.py` 行 307/394
@@ -70,6 +71,7 @@ days = args.days if args.days is not None else config["memory"]["cleanupDays"]
   - `memory_core.py` 行 175-183（status 命令遍历文件）
   - `memory_core.py` 行 336-337（配置文件写入）
 - **修复**：对所有文件 I/O 添加 `FileNotFoundError`、`PermissionError`、`OSError` 捕获
+- **说明**：部分已在 P1-3 cleanup 修复中处理
 
 ### 增强 2：数据库连接健壮性
 - **文件**：`search_engine.py` 行 44/193/301
@@ -104,6 +106,7 @@ days = args.days if args.days is not None else config["memory"]["cleanupDays"]
 - **文件**：`session_parser.py` 行 605/646
 - **问题**：同一 JSONL 文件被 `parse_session_file()` 和 `parse_session_file_full()` 解析两次
 - **方案**：合并为一次解析，同时输出摘要版和完整版内容
+- **关联**：P0-1 find_current_session 匹配逻辑已修复（2026-02-08）
 
 ### 迭代 2：Hook 自动保存
 - **设计文档**：`docs/v2.2-hook-design.md`（已有）
@@ -129,3 +132,12 @@ days = args.days if args.days is not None else config["memory"]["cleanupDays"]
 - **问题**：JSON 解析错误等被静默忽略
 - **方案**：引入 Python `logging` 模块，写入 `~/.claude/Claudememv2-data/logs/`
 - **实现**：在三个核心脚本中添加统一日志模块，支持文件日志和控制台输出
+
+---
+
+## 四、2026-02-08 综合审查
+
+详见 [2026-02-08-comprehensive-review.md](2026-02-08-comprehensive-review.md)，包含 P0-P3 共 20 项问题追踪。
+
+已修复：P0-1, P0-2, P1-1, P1-2, P1-3（共 5 项）
+待修复：P2-1 ~ P2-6, P3-1 ~ P3-10（共 15 项）
